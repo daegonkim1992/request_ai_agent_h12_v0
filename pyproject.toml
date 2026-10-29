@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "h12"
+version = "0.1.0"
+description = "해석의뢰 업무 플랫폼 h12_v0"
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=3.1,<4",
+    "SQLAlchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0,<9"]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

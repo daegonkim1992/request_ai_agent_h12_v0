@@ -1,0 +1,21 @@
+# 사유 코드 — 업무정의서 3.7 [검토 필요]
+# 코드 집합 이름은 workflow.yaml 의 reason_codes 에서 참조한다.
+
+supplement:
+  INFO_MISSING: 정보 누락
+  CONDITION_UNCLEAR: 조건 불명확
+  CONDITION_INVALID: 조건 오류
+  GEOMETRY_NOT_READY: 형상 미비
+  PURPOSE_UNCLEAR: 목적 불명확
+  TYPE_MISMATCH: 해석유형 부적합
+  OTHER: 기타
+
+reject:
+  OUT_OF_SCOPE: 지원 범위 밖
+  NOT_SUITABLE: 해석 부적합
+  DUPLICATE: 중복 의뢰
+  OTHER: 기타
+
+hold:
+  SCHEDULE: 일정
+  OTHER: 기타
