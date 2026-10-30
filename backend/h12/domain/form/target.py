@@ -22,6 +22,7 @@ from .errors import ConfirmationRequired, FormError
 from .rules import FormRules
 
 PRODUCT_KEYS = ("division", "product_lineup", "platform", "chassis")
+LOCK_KEY = "context_locked"
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,9 @@ def target_items(path: ProductPath, analysis_type: str, rules: FormRules) -> set
 
 
 def is_locked(form: Mapping[str, Any]) -> bool:
-    return bool((form.get("request_context") or {}).get("locked"))
+    context = form.get("request_context") or {}
+    # 운영 전 저장된 의뢰서는 locked 키를 썼다. 읽기는 유지하되 새 저장값은 부록 C의 키를 쓴다.
+    return bool(context.get(LOCK_KEY, context.get("locked", False)))
 
 
 def pinned_release(form: Mapping[str, Any]) -> str | None:
@@ -86,7 +89,7 @@ def pinned_release(form: Mapping[str, Any]) -> str | None:
 def config_of(form: Mapping[str, Any], reference: ReferenceSet, rules: FormRules) -> ConditionConfig:
     """확정한 의뢰 대상의 조건 구성. reference 는 의뢰가 남긴 릴리스여야 한다."""
     ctx = form.get("request_context") or {}
-    if not ctx.get("locked"):
+    if not is_locked(form):
         raise FormError("의뢰 대상이 확정되지 않았다")
     if reference.release != ctx.get("reference_release"):
         raise FormError(f"의뢰는 기준 데이터 {ctx.get('reference_release')} 를 따른다 ({reference.release} 가 아니다)")
@@ -124,7 +127,7 @@ def target_change(form: Mapping[str, Any], selection: TargetSelection, reference
     """확정한 의뢰 대상과 달라지는 점. 확정 전이거나 같으면 None.
     다시 확정하면 지금 릴리스를 따르므로 두 구성 모두 지금 릴리스(reference)의 매핑으로 비교한다."""
     ctx = form.get("request_context") or {}
-    if not ctx.get("locked"):
+    if not is_locked(form):
         return None
     new_ctx = _context(selection, reference, rules)
     keys = ("taxonomy_id", "analysis_type", "analysis_scope", "cooling_method")
@@ -162,7 +165,18 @@ def confirm_target(form: Mapping[str, Any], selection: TargetSelection, *, refer
     new = copy.deepcopy(dict(form))
     old_ctx = new.get("request_context") or {}
     ctx = _context(selection, reference, rules)
-    ctx.update(locked=True, reference_release=reference.release, confirmed_at=now.isoformat())
+    config = condition_config(reference.condition_mapping, ctx["analysis_type"], ctx["cooling_method"], rules)
+    ctx.update(
+        **{LOCK_KEY: True}, reference_release=reference.release, confirmed_at=now.isoformat(),
+        taxonomy_version=reference.taxonomy.version,
+        condition_fieldset_key=config.analysis_type,
+        condition_fieldset_snapshot={
+            "analysis_type": config.analysis_type,
+            "marks": {key: mark.value for key, mark in config.marks.items()},
+            "measurement_items": list(config.measurement_items),
+        },
+    )
+    ctx.pop("locked", None)
     new["request_context"] = ctx
 
     basic = new.setdefault("basic_info", {})
@@ -170,10 +184,11 @@ def confirm_target(form: Mapping[str, Any], selection: TargetSelection, *, refer
         basic["request_no"] = issuer.issue(now.date())  # 다시 확정해도 번호는 그대로다
 
     # 4.4 PMS 프로젝트는 제품 사업부에 종속된다. 제품 분류가 바뀌면 비운다
-    if old_ctx.get("locked") and any(old_ctx.get(k) != ctx[k] for k in PRODUCT_KEYS):
-        (new.get("analysis_overview") or {}).pop("pms_project", None)
+    if is_locked({"request_context": old_ctx}) and any(old_ctx.get(k) != ctx[k] for k in PRODUCT_KEYS):
+        overview = new.get("analysis_overview") or {}
+        for key in ("pms_project", "selected_pms_project_id", "project_name", "pms_project_code", "region"):
+            overview.pop(key, None)
 
-    config = condition_config(reference.condition_mapping, ctx["analysis_type"], ctx["cooling_method"], rules)
     conditions = new.setdefault("conditions", {})
     conditions["measurement"] = refresh_measurement(conditions.get("measurement"), config,
                                                     reference.measurement_standards)

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import date
+import copy
 
 import pytest
 
-from h12.domain.form import check_content, clear_pms_project, request_title
+from h12.domain.form import FormError, check_content, clear_pms_project, request_title, select_pms_project
 
 from .conftest import cell, confirmed, edit, locations, make_form
 
@@ -90,6 +91,16 @@ def test_4_4_pms_cleared_blocks_development_project(rules, ref, issuer):
     assert locations(_issues(rules, form)) == ["analysis_overview.pms_project"]
 
 
+def test_4_4_pms_is_rejected_for_non_development_request(rules, ref, issuer):
+    form = make_form(rules, ref, issuer, request_type="QUALITY_IMPROVEMENT")
+    with pytest.raises(FormError, match="개발 프로젝트"):
+        select_pms_project(form, "PJT2025092400000000229266", ref.pms, rules=rules)
+
+    corrupted = copy.deepcopy(form)
+    corrupted["analysis_overview"]["pms_project"] = {"division": "SAC"}
+    assert locations(_issues(rules, corrupted)) == ["analysis_overview.pms_project"]
+
+
 def test_4_4_aidc_cannot_be_development_project(rules, ref, issuer):
     # G-12: AIDC 는 PMS 프로젝트가 없어 고를 수 없다
     aidc = ref.taxonomy.find("AIDC", "CDU", None, None).id
@@ -114,6 +125,12 @@ def test_4_3_date_format(rules, form):
 def test_5_1_free_text_200(rules, form, length, ok):
     changed = edit(form, lambda f: f["analysis_overview"].update(request_description=cell(rules, "가" * length)))
     assert (_issues(rules, changed) == []) is ok
+
+
+def test_free_text_must_be_a_string(rules, form):
+    changed = edit(form, lambda f: f["analysis_overview"].update(
+        request_description={"value": ["JSON", "array"], "status": "provided", "source": "user"}))
+    assert locations(_issues(rules, changed)) == ["analysis_overview.request_description"]
 
 
 def test_title(rules, ref, issuer):

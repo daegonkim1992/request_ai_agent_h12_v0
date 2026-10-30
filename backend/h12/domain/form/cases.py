@@ -16,6 +16,7 @@ from h12.domain.reference import ReferenceSet
 from h12.domain.workflow import Issue
 
 from .conditions import active_groups
+from .errors import FormError, FormValidationError
 from .products import geometry_axis
 from .rules import FormRules
 from .target import config_of, is_locked
@@ -49,7 +50,9 @@ def case_source_hash(form: Mapping[str, Any], reference: ReferenceSet, rules: Fo
             key: context.get(key)
             for key in ("taxonomy_id", "analysis_type", "analysis_scope", "cooling_method", "reference_release")
         },
-        "geometry": copy.deepcopy(form.get("geometry") or {}),
+        # Case 선택은 형상 ID를 기준으로 한다. 표시명·Base 대비 설명 같은 설명값은
+        # 바뀌어도 조합 자체를 바꾸지 않으므로 재확인 원본에서 제외한다.
+        "geometry": _case_geometry_source(form),
         "conditions": {key: copy.deepcopy(conditions.get(key) or {}) for key in columns},
     }
     encoded = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
@@ -60,7 +63,7 @@ def confirm_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rules: Fo
     """유효한 Case 구성을 의뢰자가 확인했음을 기록한 새 의뢰서를 돌려준다."""
     issues = check_cases(form, reference=reference, rules=rules, require_confirmation=False)
     if issues:
-        raise ValueError("Case 구성을 확인할 수 없다: " + "; ".join(issue.message for issue in issues))
+        raise FormValidationError(issues)
     result = copy.deepcopy(dict(form))
     result["case_confirmation"] = {"source_hash": case_source_hash(form, reference, rules)}
     return result
@@ -77,7 +80,11 @@ def refresh_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rules: Fo
         return result
     columns = case_columns(result, reference, rules)
     geometry_ids = {axis.product_id for axis in geometry_axis(result) if axis.product_id}
-    for case in result.get("cases") or []:
+    cases = result.get("cases")
+    if not isinstance(cases, list):
+        cases = []
+        result["cases"] = cases
+    for case in cases:
         if not isinstance(case, dict):
             continue
         if case.get("geometry_id") not in geometry_ids:
@@ -90,8 +97,35 @@ def refresh_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rules: Fo
         for key, options in columns.items():
             if selections.get(key) not in options:
                 selections[key] = None
+    # 6장: 새 형상을 추가하면 그 형상용 빈 기본 Case 한 행을 즉시 만든다.
+    represented = {case.get("geometry_id") for case in cases if isinstance(case, Mapping)}
+    used_ids = {case.get("id") for case in cases if isinstance(case, Mapping) and isinstance(case.get("id"), str)}
+    for row in default_cases(result, reference=reference, rules=rules):
+        if row["geometry_id"] in represented:
+            continue
+        row["id"] = _next_case_id(used_ids)
+        used_ids.add(row["id"])
+        cases.append(row)
     result.pop("case_confirmation", None)
     return result
+
+
+def _next_case_id(used_ids: set[str]) -> str:
+    number = 1
+    while f"case-{number}" in used_ids:
+        number += 1
+    return f"case-{number}"
+
+
+def _case_geometry_source(form: Mapping[str, Any]) -> list[dict[str, Any]]:
+    geometry = form.get("geometry") or {}
+    if not isinstance(geometry, Mapping):
+        return []
+    products = [geometry.get("base_product")] + list(geometry.get("comparison_products") or [])
+    return [
+        {"id": product.get("id"), "drawing_no": product.get("drawing_no")}
+        for product in products if isinstance(product, Mapping)
+    ]
 
 
 def default_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rules: FormRules) -> list[dict[str, Any]]:
@@ -115,7 +149,7 @@ def auto_combine_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rule
     자동 생성은 최대 200행으로 제한한다. 직접 조합한 Case에는 이 상한을 적용하지 않는다.
     """
     if not 1 <= max_cases <= MAX_AUTO_CASES:
-        raise ValueError(f"자동 조합 상한은 1~{MAX_AUTO_CASES} 이다")
+        raise FormError(f"자동 조합 상한은 1~{MAX_AUTO_CASES} 이다")
     columns = case_columns(form, reference, rules)
     geometry_ids = [axis.product_id for axis in geometry_axis(form) if axis.product_id]
     values = list(columns.values())
@@ -125,7 +159,7 @@ def auto_combine_cases(form: Mapping[str, Any], *, reference: ReferenceSet, rule
     for options in values:
         count *= len(options)
     if count > max_cases:
-        raise ValueError(f"자동 조합 결과 {count}건은 상한 {max_cases}건을 넘는다")
+        raise FormError(f"자동 조합 결과 {count}건은 상한 {max_cases}건을 넘는다")
     cases = []
     for number, (geometry_id, selected) in enumerate(
             itertools.product(geometry_ids, itertools.product(*values)), start=1):

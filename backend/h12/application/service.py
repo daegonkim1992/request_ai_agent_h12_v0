@@ -9,9 +9,12 @@ from datetime import datetime
 from typing import Any, Callable, Mapping, Protocol
 
 from h12.domain.form import (
-    FormContext, FormSubmissionChecker, TargetSelection, case_sources_changed, confirm_cases, confirm_target, merge_user_edit,
-    refresh_cases, select_pms_project,
+    FormContext, FormError, FormSubmissionChecker, TargetSelection, auto_combine_cases, case_source_hash,
+    case_sources_changed, clear_pms_project, confirm_cases, confirm_target, diff_forms, form_shape_issues,
+    merge_user_edit, refresh_cases, select_pms_project,
 )
+from h12.domain.form.errors import FormValidationError
+from h12.domain.form.values import value_of
 from h12.domain.workflow import ActionNotAllowed, Request, Role, User, WorkflowEngine
 from h12.reference.store import ReferenceStore
 from h12.rulebook import load_form_rules, load_workflow_rules
@@ -28,10 +31,14 @@ class ConcurrentModification(Exception):
 class Work(Protocol):
     def user(self, user_id: str) -> User | None: ...
     def save_user(self, user: User) -> None: ...
+    def users_by_role(self, role: Role) -> list[User]: ...
     def request(self, request_id: str) -> Request | None: ...
     def requests(self) -> list[Request]: ...
     def save_request(self, request: Request) -> None: ...
     def issue_number(self, day) -> int: ...
+    def attachment(self, attachment_id: str) -> Any | None: ...
+    def save_attachment(self, attachment_id: str, request_id: str, filename: str, content_type: str,
+                        content: bytes, uploaded_by: str, created_at: datetime) -> None: ...
 
 
 class WorkProvider(Protocol):
@@ -90,14 +97,11 @@ class RequestService:
     def edit_form(self, actor: User, request_id: str, edited: Mapping[str, Any], *, confirm_case: bool = False) -> Request:
         with self.work_provider.work() as work:
             request = self._request(work, request_id)
+            self._ensure_form_shape(edited)
             form = merge_user_edit(request.form, edited)
-            if ((form.get("request_context") or {}).get("locked")
-                    and case_sources_changed(request.form, form)):
-                form = refresh_cases(form, reference=self.references.load(form["request_context"]["reference_release"]),
-                                     rules=self.form_rules)
-                if confirm_case:
-                    form = confirm_cases(form, reference=self.references.load(form["request_context"]["reference_release"]),
-                                         rules=self.form_rules)
+            self._preserve_pcb_image(request.form, form)
+            form = self._clear_pms_if_not_applicable(form)
+            form = self._reconcile_case_state(request.form, form, confirm_case=confirm_case)
             self.engine.update_form(actor, request, form)
             work.save_request(request)
             return request
@@ -118,7 +122,7 @@ class RequestService:
     def select_pms(self, actor: User, request_id: str, code: str) -> Request:
         with self.work_provider.work() as work:
             request = self._request(work, request_id)
-            form = select_pms_project(request.form, code, self.references.load().pms)
+            form = select_pms_project(request.form, code, self.references.load().pms, rules=self.form_rules)
             self.engine.update_form(actor, request, form)
             work.save_request(request)
             return request
@@ -132,6 +136,73 @@ class RequestService:
             work.save_request(request)
             return request
 
+    def auto_combine_case(self, actor: User, request_id: str, *, max_cases: int) -> Request:
+        with self.work_provider.work() as work:
+            request = self._request(work, request_id)
+            if not self.engine.can_edit_form(actor, request):
+                raise ActionNotAllowed(f"상태 {request.status} 에서는 Case를 자동 조합할 수 없다")
+            release = request.form.get("request_context", {}).get("reference_release")
+            if not release:
+                raise ActionNotAllowed("의뢰 대상을 확정한 뒤 Case를 구성해야 한다")
+            form = copy.deepcopy(request.form)
+            form["cases"] = auto_combine_cases(
+                form, reference=self.references.load(release), rules=self.form_rules, max_cases=max_cases,
+            )
+            form.pop("case_confirmation", None)
+            self.engine.update_form(actor, request, form)
+            work.save_request(request)
+            return request
+
+    def search_pms(self, division: str, query: str = ""):
+        return self.references.load().pms.search(division, query)
+
+    def analysts(self, actor: User) -> list[User]:
+        if actor.role is not Role.MANAGER:
+            raise ActionNotAllowed("해석담당자 목록은 해석관리자만 볼 수 있다")
+        with self.work_provider.work() as work:
+            return work.users_by_role(Role.ANALYST)
+
+    def upload_pcb_image(self, actor: User, request_id: str, *, filename: str, content_type: str,
+                         content: bytes) -> tuple[Request, str]:
+        with self.work_provider.work() as work:
+            request = self._request(work, request_id)
+            if not self.engine.can_edit_form(actor, request):
+                raise ActionNotAllowed(f"상태 {request.status} 에서는 PCB 이미지를 올릴 수 없다")
+            release = request.form.get("request_context", {}).get("reference_release")
+            if not release:
+                raise FormError("PCB 이미지는 의뢰 대상을 확정한 뒤 올릴 수 있다")
+            form = copy.deepcopy(request.form)
+            pcb = (form.setdefault("conditions", {}).get("pcb") or {})
+            if not pcb:
+                raise FormError("PCB발열 의뢰에서만 PCB 이미지를 올릴 수 있다")
+            attachment_id = str(uuid.uuid4())
+            work.save_attachment(attachment_id, request.id, filename, content_type, content, actor.id, self.now())
+            pcb["image"] = attachment_id
+            form["conditions"]["pcb"] = pcb
+            if case_sources_changed(request.form, form):
+                form = refresh_cases(form, reference=self.references.load(release), rules=self.form_rules)
+            self.engine.update_form(actor, request, form)
+            work.save_request(request)
+            return request, attachment_id
+
+    def attachment(self, actor: User, request_id: str, attachment_id: str):
+        with self.work_provider.work() as work:
+            request = self._request(work, request_id)
+            if not self.engine.can_view(actor, request):
+                raise ActionNotAllowed("이 첨부파일을 볼 수 없다")
+            attachment = work.attachment(attachment_id)
+            if attachment is None or attachment.request_id != request.id:
+                raise NotFound("첨부파일이 없다")
+            return attachment
+
+    def revision_diff(self, actor: User, request_id: str, revision_no: int):
+        request = self.get(actor, request_id)
+        current = next((item for item in request.revisions if item.revision_no == revision_no), None)
+        if current is None:
+            raise NotFound("revision이 없다")
+        previous = next((item for item in request.revisions if item.revision_no == revision_no - 1), None)
+        return diff_forms({} if previous is None else previous.form, current.form)
+
     def action(self, actor: User, request_id: str, action: str, inputs: Mapping[str, Any] | None) -> Request:
         with self.work_provider.work() as work:
             request = self._request(work, request_id)
@@ -139,17 +210,59 @@ class RequestService:
             if "analyst_id" in data:
                 analyst = work.user(data.pop("analyst_id"))
                 data["analyst"] = analyst
+            if action == "request_change":
+                confirm_case = data.pop("confirm_case", False)
+                if not isinstance(confirm_case, bool):
+                    raise FormError("confirm_case: true 또는 false 이어야 한다")
+            else:
+                confirm_case = False
             if action == "request_change" and isinstance(data.get("form"), Mapping):
+                self._ensure_form_shape(data["form"])
                 form = merge_user_edit(request.form, data["form"])
-                release = form.get("request_context", {}).get("reference_release")
-                if release and case_sources_changed(request.form, form):
-                    form = refresh_cases(form, reference=self.references.load(release), rules=self.form_rules)
-                    if data.pop("confirm_case", False):
-                        form = confirm_cases(form, reference=self.references.load(release), rules=self.form_rules)
+                self._preserve_pcb_image(request.form, form)
+                form = self._clear_pms_if_not_applicable(form)
+                form = self._reconcile_case_state(request.form, form, confirm_case=confirm_case)
                 data["form"] = form
             self.engine.execute(actor, request, action, data, self.now())
             work.save_request(request)
             return request
+
+    def _clear_pms_if_not_applicable(self, form: Mapping[str, Any]) -> dict[str, Any]:
+        request_type = value_of((form.get("analysis_overview") or {}).get("request_type"))
+        return clear_pms_project(form) if request_type not in self.form_rules.pms_required_for else dict(form)
+
+    @staticmethod
+    def _preserve_pcb_image(current: Mapping[str, Any], edited: Mapping[str, Any]) -> None:
+        """PCB 파일 식별자는 업로드 유스케이스로만 바꾼다."""
+        current_pcb = ((current.get("conditions") or {}).get("pcb") or {})
+        edited_pcb = ((edited.get("conditions") or {}).get("pcb") or {})
+        if isinstance(current_pcb, Mapping) and isinstance(edited_pcb, dict) and "image" in current_pcb:
+            edited_pcb["image"] = copy.deepcopy(current_pcb["image"])
+
+    def _reconcile_case_state(self, current: Mapping[str, Any], edited: dict[str, Any], *, confirm_case: bool) -> dict[str, Any]:
+        """활성 Case 열의 실제 원본이 바뀔 때만 재확인을 요구한다."""
+        release = (edited.get("request_context") or {}).get("reference_release")
+        if not release:
+            return edited
+        reference = self.references.load(release)
+        try:
+            changed = case_source_hash(current, reference, self.form_rules) != case_source_hash(
+                edited, reference, self.form_rules,
+            )
+        except (FormError, KeyError, TypeError):
+            changed = case_sources_changed(current, edited)
+        if changed:
+            result = refresh_cases(edited, reference=reference, rules=self.form_rules)
+            return confirm_cases(result, reference=reference, rules=self.form_rules) if confirm_case else result
+        if current.get("case_confirmation"):
+            edited["case_confirmation"] = copy.deepcopy(current["case_confirmation"])
+        return edited
+
+    @staticmethod
+    def _ensure_form_shape(form: Mapping[str, Any]) -> None:
+        issues = form_shape_issues(form)
+        if issues:
+            raise FormValidationError(issues)
 
     @staticmethod
     def _request(work: Work, request_id: str) -> Request:

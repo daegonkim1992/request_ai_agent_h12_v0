@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from typing import Any, Iterator
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, create_engine, inspect, select, text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, LargeBinary, String, create_engine, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, selectinload, sessionmaker
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
@@ -26,6 +26,7 @@ class UserRow(Base):
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     department: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class RequestRow(Base):
@@ -54,6 +55,17 @@ class RequestRow(Base):
     )
 
     __mapper_args__ = {"version_id_col": version_id}
+
+
+class AttachmentRow(Base):
+    __tablename__ = "request_attachments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    request_id: Mapped[str] = mapped_column(ForeignKey("requests.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    uploaded_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class RequestRevisionRow(Base):
@@ -113,8 +125,17 @@ class Database:
     def create_all(self) -> None:
         legacy = self._prepare_legacy_snapshot_migration()
         Base.metadata.create_all(self.engine)
+        self._ensure_user_name_column()
         if legacy is not None:
             self._restore_legacy_snapshot(*legacy)
+
+    def _ensure_user_name_column(self) -> None:
+        inspector = inspect(self.engine)
+        if "users" not in inspector.get_table_names():
+            return
+        if "name" not in {column["name"] for column in inspector.get_columns("users")}:
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN name VARCHAR(200)"))
 
     def _prepare_legacy_snapshot_migration(self) -> tuple[list[Any], list[Any]] | None:
         """기존 snapshot DB를 이관할 준비를 하고, 중단된 이관도 재개한다."""
@@ -197,14 +218,31 @@ class UserRepository:
 
     def get(self, user_id: str) -> User | None:
         row = self.session.get(UserRow, user_id)
-        return User(row.id, Role(row.role), row.department) if row else None
+        return User(row.id, Role(row.role), row.department, row.name) if row else None
+
+    def list(self, role: Role | None = None) -> list[User]:
+        statement = select(UserRow).order_by(UserRow.name, UserRow.id)
+        if role is not None:
+            statement = statement.where(UserRow.role == role.value)
+        return [User(row.id, Role(row.role), row.department, row.name) for row in self.session.scalars(statement)]
 
     def save(self, user: User) -> None:
         row = self.session.get(UserRow, user.id)
         if row is None:
-            self.session.add(UserRow(id=user.id, role=user.role.value, department=user.department))
+            self.session.add(UserRow(id=user.id, role=user.role.value, department=user.department, name=user.name))
         else:
-            row.role, row.department = user.role.value, user.department
+            row.role, row.department, row.name = user.role.value, user.department, user.name
+
+
+class AttachmentRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get(self, attachment_id: str) -> AttachmentRow | None:
+        return self.session.get(AttachmentRow, attachment_id)
+
+    def save(self, attachment: AttachmentRow) -> None:
+        self.session.add(attachment)
 
 
 class RequestRepository:
@@ -298,12 +336,16 @@ class SqlWork:
         self.session = session
         self.users = UserRepository(session)
         self.request_store = RequestRepository(session)
+        self.attachments = AttachmentRepository(session)
 
     def user(self, user_id: str) -> User | None:
         return self.users.get(user_id)
 
     def save_user(self, user: User) -> None:
         self.users.save(user)
+
+    def users_by_role(self, role: Role) -> list[User]:
+        return self.users.list(role)
 
     def request(self, request_id: str) -> Request | None:
         return self.request_store.get(request_id)
@@ -313,6 +355,16 @@ class SqlWork:
 
     def save_request(self, request: Request) -> None:
         self.request_store.save(request)
+
+    def attachment(self, attachment_id: str) -> AttachmentRow | None:
+        return self.attachments.get(attachment_id)
+
+    def save_attachment(self, attachment_id: str, request_id: str, filename: str, content_type: str,
+                        content: bytes, uploaded_by: str, created_at: datetime) -> None:
+        self.attachments.save(AttachmentRow(
+            id=attachment_id, request_id=request_id, filename=filename, content_type=content_type,
+            content=content, uploaded_by=uploaded_by, created_at=created_at,
+        ))
 
     def issue_number(self, day: date) -> int:
         row = self.session.get(NumberSequenceRow, day)

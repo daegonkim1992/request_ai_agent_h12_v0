@@ -131,7 +131,7 @@ def make_form(rules, ref, issuer, analysis_type="AIRFLOW_PATTERN", request_type=
     edited["conditions"] = {**conditions(rules, ref, analysis_type), "measurement": form["conditions"]["measurement"]}
     form = merge_user_edit(form, edited)
     if request_type == "DEVELOPMENT_PROJECT":
-        form = select_pms_project(form, PMS_SAC, ref.pms)
+        form = select_pms_project(form, PMS_SAC, ref.pms, rules=rules)
     columns = case_columns(form, ref, rules)
     selections = {
         key: "$single" if options == ("$single",) else options[0]

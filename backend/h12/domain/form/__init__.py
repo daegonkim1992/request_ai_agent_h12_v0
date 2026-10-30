@@ -4,7 +4,7 @@
 의뢰 대상 확정·PMS 선택처럼 시스템이 정하는 값을 바꾸는 작업과 검사를 제공한다.
 """
 
-from .check import FormContext, check_form
+from .check import FormContext, check_form, form_shape_issues
 from .cases import (
     MAX_AUTO_CASES, SINGLE, auto_combine_cases, case_columns, case_source_hash, check_cases, confirm_cases,
     default_cases, refresh_cases,
@@ -16,7 +16,7 @@ from .conditions import (
 from .content import check_content, clear_pms_project, request_title, select_pms_project
 from .diff import FormChange, diff_forms
 from .edit import case_sources_changed, merge_user_edit
-from .errors import ConfirmationRequired, FormError
+from .errors import ConfirmationRequired, FormError, FormValidationError
 from .products import GeometryAxis, check_products, geometry_axis
 from .rules import FormRules, RulesError
 from .submission import FormSubmissionChecker
@@ -27,11 +27,11 @@ from .target import (
 from .values import Need, ValueSource, ValueStatus
 
 __all__ = [
-    "ConditionConfig", "ConfirmationRequired", "FormChange", "FormContext", "FormError", "FormRules",
+    "ConditionConfig", "ConfirmationRequired", "FormChange", "FormContext", "FormError", "FormValidationError", "FormRules",
     "FormSubmissionChecker",
     "GeometryAxis", "InMemoryNumberIssuer", "Need", "RequestNumberIssuer", "RulesError", "TargetChange",
     "TargetSelection", "ValueSource", "ValueStatus", "active_groups", "check_conditions", "check_content",
-    "auto_combine_cases", "case_columns", "case_source_hash", "check_cases", "check_form", "check_products",
+    "auto_combine_cases", "case_columns", "case_source_hash", "check_cases", "check_form", "form_shape_issues", "check_products",
     "check_selection",
     "clear_pms_project", "condition_config", "config_of", "confirm_cases", "confirm_target", "default_pcb",
     "diff_forms", "field_need", "geometry_axis", "group_mark", "is_active",

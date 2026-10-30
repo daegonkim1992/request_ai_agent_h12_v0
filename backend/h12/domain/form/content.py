@@ -37,6 +37,8 @@ def check_content(form: Mapping[str, Any], rules: FormRules, request_date: date)
 
     if request_type in rules.pms_required_for:
         _check_pms(c, form)
+    elif overview.get("pms_project"):
+        c.add("analysis_overview.pms_project", "프로젝트명(PMS): 개발 프로젝트에서만 고를 수 있다")
     return c.issues
 
 
@@ -53,28 +55,37 @@ def _check_pms(c: Checker, form: Mapping[str, Any]) -> None:
         c.add("analysis_overview.pms_project", f"프로젝트명(PMS): 제품 사업부({division})의 프로젝트가 아니다")
 
 
-def select_pms_project(form: Mapping[str, Any], code: str, pms: PmsDirectory) -> dict[str, Any]:
+def select_pms_project(form: Mapping[str, Any], code: str, pms: PmsDirectory, *, rules: FormRules) -> dict[str, Any]:
     """4.4 PMS 프로젝트를 고른다. 의뢰 대상의 제품 사업부 프로젝트만 고를 수 있다."""
     division = (form.get("request_context") or {}).get("division")
-    if not (form.get("request_context") or {}).get("locked"):
+    if not (form.get("request_context") or {}).get("context_locked", (form.get("request_context") or {}).get("locked")):
         raise FormError("PMS 프로젝트는 의뢰 대상(제품 사업부)을 확정한 뒤 고른다")
+    request_type = value_of((form.get("analysis_overview") or {}).get("request_type"))
+    if request_type not in rules.pms_required_for:
+        raise FormError("PMS 프로젝트는 개발 프로젝트에서만 고를 수 있다")
     project = pms.get(code)
     if project is None or project.division != division:
         raise FormError(f"PMS 프로젝트 {code} 는 제품 사업부 {division} 의 프로젝트가 아니다")
     new = copy.deepcopy(dict(form))
-    new.setdefault("analysis_overview", {})["pms_project"] = {
+    overview = new.setdefault("analysis_overview", {})
+    overview["pms_project"] = {
         "code": project.code,
         "project_name": project.project,
         "rep_model": project.rep_model,
         "region": project.region,
         "division": project.division,
     }
+    # 부록 C의 평면 키도 함께 제공해 외부 소비자가 자동 필드를 안정적으로 읽게 한다.
+    overview.update(selected_pms_project_id=project.code, project_name=project.project,
+                    pms_project_code=project.code, region=project.region)
     return new
 
 
 def clear_pms_project(form: Mapping[str, Any]) -> dict[str, Any]:
     new = copy.deepcopy(dict(form))
-    (new.get("analysis_overview") or {}).pop("pms_project", None)
+    overview = new.get("analysis_overview") or {}
+    for key in ("pms_project", "selected_pms_project_id", "project_name", "pms_project_code", "region"):
+        overview.pop(key, None)
     return new
 
 

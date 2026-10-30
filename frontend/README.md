@@ -1,32 +1,12 @@
-# React + TypeScript + Vite
+# h12 프런트엔드
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+의뢰 목록, 할 일, 의뢰서 편집, 상태별 처리, Case 확인과 이력 조회를 제공하는 React/Vite UI다.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+개발 서버는 `/api` 요청을 `http://127.0.0.1:8512`로 전달한다. 브라우저에는 인증 비밀키를
+두지 않는다. 실제 로그인 인증 프록시가 `X-H12-User-Id`, 시각, HMAC 서명 헤더를 붙여야 한다.
+개발 환경에서도 같은 역할의 프록시를 사용한다.

@@ -21,12 +21,13 @@ def main() -> None:
     add.add_argument("--id", required=True)
     add.add_argument("--role", choices=[role.value for role in Role], required=True)
     add.add_argument("--department", required=True)
+    add.add_argument("--name")
     args = parser.parse_args()
 
     database = Database(args.database_url)
     database.create_all()
     with database.work() as work:
-        work.save_user(User(args.id, Role(args.role), args.department))
+        work.save_user(User(args.id, Role(args.role), args.department, args.name or args.id))
 
 
 if __name__ == "__main__":

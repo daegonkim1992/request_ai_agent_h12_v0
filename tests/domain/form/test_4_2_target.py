@@ -62,6 +62,10 @@ def test_4_2_confirm_locks_target_and_pins_release(rules, ref, issuer):
     form = confirmed(rules, ref, issuer, "AIRFLOW_PATTERN")
     ctx = form["request_context"]
     assert is_locked(form)
+    assert ctx["context_locked"] is True
+    assert ctx["taxonomy_version"] == ref.taxonomy.version
+    assert ctx["condition_fieldset_key"] == "AIRFLOW_PATTERN"
+    assert ctx["condition_fieldset_snapshot"]["analysis_type"] == "AIRFLOW_PATTERN"
     assert pinned_release(form) == ref.release  # 3.4-10
     assert (ctx["division"], ctx["product_lineup"], ctx["platform"], ctx["chassis"]) == ("SAC", "Multi V", "AHU", "10RT")
     assert ctx["display_path"] == "SAC > Multi V > AHU > 10RT"
@@ -151,11 +155,13 @@ def test_5_3_9_pcb_defaults(rules, ref, issuer):
 
 def test_4_4_pms_belongs_to_product_division(rules, ref, issuer):
     with pytest.raises(FormError):
-        select_pms_project({}, PMS_SAC, ref.pms)  # 의뢰 대상 확정 전
+        select_pms_project({}, PMS_SAC, ref.pms, rules=rules)  # 의뢰 대상 확정 전
     rac = confirmed(rules, ref, issuer, taxonomy_id=_rac_window(ref), analysis_scope="indoor")
     with pytest.raises(FormError):
-        select_pms_project(rac, PMS_SAC, ref.pms)
-    form = select_pms_project(confirmed(rules, ref, issuer), PMS_SAC, ref.pms)
+        select_pms_project(rac, PMS_SAC, ref.pms, rules=rules)
+    ready = edit(confirmed(rules, ref, issuer), lambda f: f.setdefault("analysis_overview", {}).update(
+        request_type=rules.values.cell("DEVELOPMENT_PROJECT")))
+    form = select_pms_project(ready, PMS_SAC, ref.pms, rules=rules)
     project = ref.pms.get(PMS_SAC)
     assert form["analysis_overview"]["pms_project"] == {
         "code": PMS_SAC, "project_name": project.project, "rep_model": project.rep_model,

@@ -29,6 +29,7 @@ class User:
     id: str
     role: Role
     department: str
+    name: str | None = None
 
 
 @dataclass(frozen=True)

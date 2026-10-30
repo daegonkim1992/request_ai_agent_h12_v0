@@ -10,8 +10,8 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 
 from h12.application import ConcurrentModification, RequestService
-from h12.domain.form import InMemoryNumberIssuer
-from h12.domain.workflow import Request, ResultRound, Revision, Role, User, WorkflowEvent
+from h12.domain.form import InMemoryNumberIssuer, TargetSelection
+from h12.domain.workflow import Request, ResultRound, Revision, Role, SubmissionBlocked, User, WorkflowEvent
 from h12.infra import Database
 from h12.reference import default_store
 from h12.rulebook import load_form_rules
@@ -41,6 +41,73 @@ def test_editing_non_case_content_keeps_case_confirmation():
     changed = service.edit_form(requester, request.id, edited)
 
     assert changed.form["case_confirmation"] == form["case_confirmation"]
+
+
+def test_measurement_edit_keeps_case_confirmation_but_geometry_edit_adds_default_case():
+    rules = load_form_rules()
+    references = default_store()
+    database = Database("sqlite://")
+    database.create_all()
+    service = RequestService(database, references, now=lambda: NOW)
+    requester = User("requester", Role.REQUESTER, "CAE")
+    service.add_user(requester)
+    request = service.create(requester)
+
+    from h12.domain.form import TargetSelection
+    path = references.load().taxonomy.find("SAC", "Multi V", "AHU", "10RT")
+    service.confirm_target(requester, request.id, TargetSelection(path.id, "PDB"))
+    current = service.get(requester, request.id)
+    draft = copy.deepcopy(current.form)
+    draft["geometry"] = {"base_product": {"id": "base", "drawing_no": rules.values.cell("MEA-1")},
+                         "comparison_products": []}
+    changed = service.edit_form(requester, request.id, draft)
+    assert [(case["geometry_id"], case["condition_package_ids"]) for case in changed.form["cases"]] == [
+        ("base", {"operating": None, "space_environment": None, "supply_air": None,
+                  "heat_exchanger": None, "installation": None}),
+    ]
+
+    complete = make_form(rules, references.load(), InMemoryNumberIssuer(rules.target.request_no_format), "PDB")
+    with database.work() as work:
+        stored = work.request(request.id)
+        stored.form = complete
+        work.save_request(stored)
+    edited = copy.deepcopy(complete)
+    edited["conditions"]["measurement"]["temperature_criterion"]["value"] = "새 기준"
+    assert "case_confirmation" in service.edit_form(requester, request.id, edited).form
+
+
+def test_request_change_can_reconfirm_cases_with_the_explicit_input():
+    rules = load_form_rules()
+    references = default_store()
+    database = Database("sqlite://")
+    database.create_all()
+    service = RequestService(database, references, now=lambda: NOW)
+    requester = User("requester", Role.REQUESTER, "CAE")
+    manager = User("manager", Role.MANAGER, "CAE")
+    analyst = User("analyst", Role.ANALYST, "CAE")
+    for user in (requester, manager, analyst):
+        service.add_user(user)
+    request = service.create(requester)
+    path = references.load().taxonomy.find("SAC", "Multi V", "AHU", "10RT")
+    assert path is not None
+    service.confirm_target(requester, request.id, TargetSelection(path.id, "AIRFLOW_PATTERN"))
+    service.edit_form(requester, request.id, make_form(
+        rules, references.load(), InMemoryNumberIssuer(rules.target.request_no_format),
+    ), confirm_case=True)
+    service.action(requester, request.id, "submit", {})
+    service.action(manager, request.id, "accept_and_assign", {"analyst_id": analyst.id})
+    proposed = copy.deepcopy(service.get(requester, request.id).form)
+    proposed["conditions"]["operating"]["packages"][0]["rpm"] = rules.values.cell(900)
+
+    with pytest.raises(SubmissionBlocked):
+        service.action(requester, request.id, "request_change", {"form": proposed, "comment": "회전수 변경"})
+
+    changed = service.action(requester, request.id, "request_change", {
+        "form": proposed, "comment": "회전수 변경", "confirm_case": True,
+    })
+
+    assert changed.pending is not None
+    assert changed.pending.proposed_form["case_confirmation"]
 
 
 def test_storage_rejects_stale_concurrent_update(tmp_path):

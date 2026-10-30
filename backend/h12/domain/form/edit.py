@@ -19,6 +19,8 @@ def merge_user_edit(current: Mapping[str, Any], edited: Mapping[str, Any]) -> di
     _keep(new, current, "case_confirmation")
     _keep(new.setdefault("basic_info", {}), current.get("basic_info") or {}, "request_no")
     _keep(new.setdefault("analysis_overview", {}), current.get("analysis_overview") or {}, "pms_project")
+    for key in ("selected_pms_project_id", "project_name", "pms_project_code", "region"):
+        _keep(new["analysis_overview"], current.get("analysis_overview") or {}, key)
 
     conditions = new.setdefault("conditions", {})
     edited_measurement = conditions.get("measurement") or {}
@@ -43,9 +45,34 @@ def _keep(target: dict[str, Any], source: Mapping[str, Any], key: str) -> None:
 
 
 def case_sources_changed(current: Mapping[str, Any], edited: Mapping[str, Any]) -> bool:
-    """형상·조건의 사용자 수정은 Case 재확인을 무효화한다."""
-    return ((current.get("geometry") or {}) != (edited.get("geometry") or {})
-            or (current.get("conditions") or {}) != (edited.get("conditions") or {}))
+    """Case 조합에 실제 쓰이는 형상·활성 조건만 비교한다.
+
+    측정·판정 기준은 의뢰 전체의 값이고 Case 열이 아니며, 꺼진 조건의 보존값도
+    선택지에 나타나지 않는다. 이 둘은 재확인을 무효화하지 않는다.
+    """
+    return (_geometry_source(current) != _geometry_source(edited)
+            or _condition_sources(current) != _condition_sources(edited))
+
+
+def _geometry_source(form: Mapping[str, Any]) -> list[dict[str, Any]]:
+    geometry = form.get("geometry") or {}
+    if not isinstance(geometry, Mapping):
+        return []
+    products = [geometry.get("base_product")] + list(geometry.get("comparison_products") or [])
+    return [{"id": item.get("id"), "drawing_no": item.get("drawing_no")}
+            for item in products if isinstance(item, Mapping)]
+
+
+def _condition_sources(form: Mapping[str, Any]) -> dict[str, Any]:
+    conditions = form.get("conditions") or {}
+    if not isinstance(conditions, Mapping):
+        return {}
+    source = {}
+    for key, data in conditions.items():
+        if key == "measurement" or _is_toggled_off(data):
+            continue
+        source[key] = data
+    return source
 
 
 def _clear_removed_case_choices(form: dict[str, Any]) -> None:

@@ -121,12 +121,17 @@ class Checker:
 
     def _format(self, location: str, value: Any, label: str, kind: str,
                 choices: Mapping[str, str] | None, allow_custom: bool) -> None:
-        if kind == "number" and as_number(value) is None:
+        if kind == "text" and not isinstance(value, str):
+            self.add(location, f"{label}: 텍스트여야 한다")
+        elif kind == "number" and as_number(value) is None:
             self.add(location, f"{label}: 숫자여야 한다")
         elif kind == "date" and as_date(value) is None:
             self.add(location, f"{label}: 날짜(YYYY-MM-DD)여야 한다")
-        elif kind == "choice" and choices is not None and not allow_custom and value not in choices:
-            self.add(location, f"{label}: {list(choices.values())} 중에서 골라야 한다")
+        elif kind == "choice":
+            if not isinstance(value, str):
+                self.add(location, f"{label}: 선택지 값은 텍스트여야 한다")
+            elif choices is not None and not allow_custom and value not in choices:
+                self.add(location, f"{label}: {list(choices.values())} 중에서 골라야 한다")
 
 
 _MISSING_MESSAGE = {
