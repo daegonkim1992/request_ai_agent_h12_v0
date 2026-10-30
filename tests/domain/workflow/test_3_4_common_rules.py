@@ -10,9 +10,6 @@ from h12.domain.workflow import (
 
 from .conftest import ANALYST, MANAGER, OWNER, SAME_DEPT
 
-CHANGE = {"form": {"title": "변경안"}, "comment": "RPM 추가"}
-
-
 # 3.4-1 수정 가능 상태
 @pytest.mark.parametrize("status,editable", [
     ("DRAFT", True), ("REVISION_REQUESTED", True), ("ANALYSIS_REVISION_REQUESTED", True),
@@ -73,30 +70,34 @@ def test_3_4_4_cancel_pending_freezes_form(engine, make_request, clock):
 
 
 # 3.4-3, 3.4-5 진행 중 변경과 revision
-def test_3_4_5_revisions(engine, make_request, clock):
+def test_3_4_5_revisions(engine, make_request, changed_form, clock):
     request = make_request("IN_PROGRESS")  # 제출 1회
     assert [r.cause_event for r in request.revisions] == ["SUBMITTED"]
+    original = request.form
+    proposed = changed_form(request.form)
 
-    engine.execute(OWNER, request, "request_change", CHANGE, clock())
-    assert request.form == {"title": "초안"}, "수락 전에는 반영하지 않는다"
+    engine.execute(OWNER, request, "request_change", {"form": proposed, "comment": "RPM 추가"}, clock())
+    assert request.form == original, "수락 전에는 반영하지 않는다"
     engine.execute(ANALYST, request, "accept_change", {}, clock())
 
-    assert request.form == {"title": "변경안"}
+    assert request.form == proposed
     assert [r.revision_no for r in request.revisions] == [1, 2]
-    assert request.current_revision.form == {"title": "변경안"}
+    assert request.current_revision.form == proposed
     assert request.current_revision.cause_event == "CHANGE_ACCEPTED"
-    assert request.revisions[0].form == {"title": "초안"}
+    assert request.revisions[0].form == original
 
 
 def test_3_4_3_declined_change_keeps_original(engine, make_request, clock):
     request = make_request("IN_PROGRESS", "change")
+    original = request.form
+    proposed = request.pending.proposed_form
     engine.execute(ANALYST, request, "decline_change", {"comment": "진행 많이 됨"}, clock())
-    assert request.form == {"title": "초안"}
+    assert request.form == original
     assert len(request.revisions) == 1
     assert request.pending is None
     # 3.4-7 거절된 제안 내용도 이력에 남는다
     requested = next(e for e in request.events if e.event_type == "CHANGE_REQUESTED")
-    assert requested.payload["proposed_form"] == {"title": "변경안"}
+    assert requested.payload["proposed_form"] == proposed
 
 
 def test_g2_change_must_be_answered_before_analysis_supplement(engine, make_request, clock):
@@ -125,18 +126,22 @@ def test_cancel_approved_during_hold_clears_holder(engine, make_request, clock):
     assert (request.status, request.pending, request.held_by) == ("CANCELLED", None, None)
 
 
-def test_3_4_5_resubmit_snapshots_edited_form(engine, make_request, clock):
+def test_3_4_5_resubmit_snapshots_edited_form(engine, make_request, changed_form, clock):
     request = make_request("REVISION_REQUESTED")
-    engine.update_form(OWNER, request, {"title": "보완본"})
+    original = request.form
+    edited = changed_form(request.form)
+    engine.update_form(OWNER, request, edited)
     engine.execute(OWNER, request, "resubmit", {}, clock())
-    assert [(r.revision_no, r.form["title"], r.cause_event) for r in request.revisions] == [
-        (1, "초안", "SUBMITTED"), (2, "보완본", "RESUBMITTED")]
+    assert [(r.revision_no, r.cause_event) for r in request.revisions] == [(1, "SUBMITTED"), (2, "RESUBMITTED")]
+    assert request.revisions[0].form == original
+    assert request.revisions[1].form == edited
 
 
-def test_3_4_5_revision_is_snapshot(engine, make_request):
+def test_3_4_5_revision_is_snapshot(engine, make_request, changed_form):
     request = make_request("REVISION_REQUESTED")
-    engine.update_form(OWNER, request, {"title": "편집 중"})
-    assert request.current_revision.form == {"title": "초안"}
+    original = request.current_revision.form
+    engine.update_form(OWNER, request, changed_form(request.form))
+    assert request.current_revision.form == original
 
 
 # 3.4-6 결과 회차
@@ -190,7 +195,7 @@ class _Blocking:
     def __init__(self):
         self.seen = []
 
-    def check(self, form):
+    def check(self, form, *, request_date):
         self.seen.append(form)
         return [Issue("conditions.operating[0].fan_rpm", "필수 입력")] if form.get("title") != "완성본" else []
 

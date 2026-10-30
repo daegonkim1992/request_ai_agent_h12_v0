@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from h12.domain.form import active_groups, config_of
+import copy
+
+from h12.domain.form import FormContext, active_groups, check_form, config_of
 
 from .conftest import make_form
 
@@ -28,6 +30,13 @@ def test_water_cooled_pcb(rules, ref, issuer, check):
 def test_unconfirmed_target_blocks(rules, check):
     issues = check({})
     assert issues[0].location == "request_context"
+
+
+def test_invalid_pinned_release_is_reported_as_a_submission_issue(rules, ref, issuer, ctx):
+    form = copy.deepcopy(make_form(rules, ref, issuer))
+    form["request_context"].pop("reference_release")
+    issues = check_form(form, FormContext(rules=rules, reference=ctx.reference, request_date=ctx.request_date))
+    assert "request_context.reference_release" in [issue.location for issue in issues]
 
 
 @pytest.mark.parametrize("analysis_type,expected", [

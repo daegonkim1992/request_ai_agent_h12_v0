@@ -12,8 +12,8 @@ from datetime import date, datetime
 import pytest
 
 from h12.domain.form import (
-    FormContext, InMemoryNumberIssuer, TargetSelection, check_form, confirm_target, merge_user_edit,
-    select_pms_project,
+    FormContext, InMemoryNumberIssuer, TargetSelection, case_columns, check_form, confirm_target, merge_user_edit,
+    confirm_cases, select_pms_project,
 )
 from h12.reference import default_store
 from h12.rulebook import load_form_rules
@@ -125,14 +125,26 @@ def conditions(rules, ref, analysis_type, cooling=None):
 
 def make_form(rules, ref, issuer, analysis_type="AIRFLOW_PATTERN", request_type="QUALITY_IMPROVEMENT",
               **target):
-    """제출 조건(Case 제외)을 모두 채운 의뢰서."""
+    """8장 제출 조건을 모두 채우고 Case까지 확인한 의뢰서."""
     form = confirmed(rules, ref, issuer, analysis_type, **target)
     edited = {**copy.deepcopy(form), **content(rules, request_type)}
     edited["conditions"] = {**conditions(rules, ref, analysis_type), "measurement": form["conditions"]["measurement"]}
     form = merge_user_edit(form, edited)
     if request_type == "DEVELOPMENT_PROJECT":
         form = select_pms_project(form, PMS_SAC, ref.pms)
-    return form
+    columns = case_columns(form, ref, rules)
+    selections = {
+        key: "$single" if options == ("$single",) else options[0]
+        for key, options in columns.items()
+    }
+    form["cases"] = [{
+        "id": "c1", "geometry_id": "p1",
+        "condition_package_ids": copy.deepcopy(selections),
+    }, {
+        "id": "c2", "geometry_id": "p2",
+        "condition_package_ids": copy.deepcopy(selections),
+    }]
+    return confirm_cases(form, reference=ref, rules=rules)
 
 
 def edit(form, mutate):

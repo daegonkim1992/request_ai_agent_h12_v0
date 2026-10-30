@@ -179,7 +179,9 @@ def confirm_target(form: Mapping[str, Any], selection: TargetSelection, *, refer
                                                     reference.measurement_standards)
     if group_mark(rules.groups["pcb"], config) is not Mark.HIDDEN and not conditions.get("pcb"):
         conditions["pcb"] = default_pcb(rules, ctx["cooling_method"] == rules.target.water_cooling)
-    return new
+    # 의뢰 대상이 다시 확정되면 Case 열이 같아 보여도 원본이 바뀐 것으로 보고 다시 확인한다 (4.6, 6장).
+    from .cases import refresh_cases
+    return refresh_cases(new, reference=reference, rules=rules)
 
 
 def _context(selection: TargetSelection, reference: ReferenceSet, rules: FormRules) -> dict[str, Any]:

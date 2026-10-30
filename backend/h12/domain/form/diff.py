@@ -39,6 +39,9 @@ def _flatten(value: Any, path: str = "") -> dict[str, Any]:
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
         for k, v in value.items():
+            # Case 재확인 지문은 시스템이 관리한다. revision 비교에는 업무 데이터만 보인다.
+            if not path and k == "case_confirmation":
+                continue
             out.update(_flatten(v, f"{path}.{k}" if path else str(k)))
         return out
     if isinstance(value, list):

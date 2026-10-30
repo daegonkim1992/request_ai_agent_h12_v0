@@ -16,7 +16,7 @@ from .model import (
     PendingKind, PendingRequest, Request, ResultRound, Revision, Role, User, WorkflowEvent,
 )
 from .rules import ActionRule, TodoRule, WorkflowRules
-from .submission import AcceptAll, SubmissionChecker
+from .submission import SubmissionChecker
 
 _ACTOR_CHECKS: dict[str, Callable[[User, Request], bool]] = {
     "requester": lambda u, r: u.role is Role.REQUESTER and u.id == r.requester_id,
@@ -27,9 +27,9 @@ _ACTOR_CHECKS: dict[str, Callable[[User, Request], bool]] = {
 
 
 class WorkflowEngine:
-    def __init__(self, rules: WorkflowRules, submission_checker: SubmissionChecker | None = None):
+    def __init__(self, rules: WorkflowRules, submission_checker: SubmissionChecker):
         self.rules = rules
-        self.submission_checker = submission_checker or AcceptAll()
+        self.submission_checker = submission_checker
 
     # ── 조회 ──────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ class WorkflowEngine:
             raise ActionNotAllowed(f"{rule.label}: 상태 {request.status} 에서 이 사용자는 수행할 수 없다")
         inputs = dict(inputs or {})
         self._validate_inputs(rule, request, inputs)
-        self._run_checks(rule, request, inputs)
+        self._run_checks(rule, request, inputs, now)
 
         from_status = request.status
         target = rule.transitions[from_status]
@@ -151,10 +151,11 @@ class WorkflowEngine:
         if errors:
             raise InvalidInput(errors)
 
-    def _run_checks(self, rule: ActionRule, request: Request, inputs: Mapping[str, Any]) -> None:
+    def _run_checks(self, rule: ActionRule, request: Request, inputs: Mapping[str, Any], now: datetime) -> None:
         if "submission" in rule.checks:
             form = inputs["form"] if "form" in rule.requires else request.form
-            issues = self.submission_checker.check(form)
+            request_date = request.revisions[0].created_at.date() if request.revisions else now.date()
+            issues = self.submission_checker.check(form, request_date=request_date)
             if issues:
                 raise SubmissionBlocked(issues)
 

@@ -5,12 +5,17 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timedelta
 
 import pytest
 
+from h12.domain.form import FormContext, FormSubmissionChecker, InMemoryNumberIssuer, confirm_cases
 from h12.domain.workflow import Request, Role, User, WorkflowEngine
-from h12.rulebook import load_workflow_rules
+from h12.reference import default_store
+from h12.rulebook import load_form_rules, load_workflow_rules
+
+from tests.domain.form.conftest import make_form
 
 OWNER = User("req-1", Role.REQUESTER, "냉동기설계팀")
 SAME_DEPT = User("req-2", Role.REQUESTER, "냉동기설계팀")
@@ -37,8 +42,24 @@ def rules():
 
 
 @pytest.fixture
-def engine(rules):
-    return WorkflowEngine(rules)
+def form_rules():
+    return load_form_rules()
+
+
+@pytest.fixture
+def ref():
+    return default_store().load()
+
+
+@pytest.fixture
+def issuer(form_rules):
+    return InMemoryNumberIssuer(form_rules.target.request_no_format)
+
+
+@pytest.fixture
+def engine(rules, form_rules):
+    context = FormContext(rules=form_rules, reference=default_store().load, request_date=datetime(2026, 11, 2).date())
+    return WorkflowEngine(rules, FormSubmissionChecker(context))
 
 
 @pytest.fixture
@@ -65,21 +86,33 @@ _PATHS["RESULT_REVIEW"] = _PATHS["IN_PROGRESS"] + [
 _PATHS["COMPLETED"] = _PATHS["RESULT_REVIEW"] + [(OWNER, "confirm_result", {})]
 
 _PENDING = {
-    "change": (OWNER, "request_change", {"form": {"title": "변경안"}, "comment": "RPM 추가"}),
     "cancel": (OWNER, "request_cancel", {"comment": "과제 중단"}),
 }
 
 
 @pytest.fixture
-def make_request(engine, clock):
+def changed_form(form_rules, ref):
+    """8장 검사를 통과하면서 실제 내용이 바뀐 진행 중 변경안."""
+    def change(form):
+        result = copy.deepcopy(form)
+        result["conditions"]["operating"]["packages"][0]["rpm"] = form_rules.values.cell(900)
+        return confirm_cases(result, reference=ref, rules=form_rules)
+    return change
+
+
+@pytest.fixture
+def make_request(engine, clock, form_rules, ref, issuer, changed_form):
     counter = iter(range(1, 10_000))
 
     def make(status: str = "DRAFT", pending: str | None = None) -> Request:
         request = engine.create_request(OWNER, f"r-{next(counter)}", clock())
-        engine.update_form(OWNER, request, {"title": "초안"})
+        engine.update_form(OWNER, request, make_form(form_rules, ref, issuer))
         steps = list(_PATHS[status])
         if pending:
-            steps.append(_PENDING[pending])
+            if pending == "change":
+                steps.append((OWNER, "request_change", {"form": changed_form(request.form), "comment": "RPM 추가"}))
+            else:
+                steps.append(_PENDING[pending])
         for user, action, inputs in steps:
             engine.execute(user, request, action, inputs, clock())
         assert request.status == status

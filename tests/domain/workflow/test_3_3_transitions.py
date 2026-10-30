@@ -8,7 +8,7 @@ from h12.domain.workflow import ActionNotAllowed
 
 from .conftest import ANALYST, MANAGER, OTHER_ANALYST, OWNER, SUPPLEMENT
 
-CHANGE = {"form": {"title": "변경안"}, "comment": "RPM 추가"}
+CHANGE = {"comment": "RPM 추가"}
 
 # (시작 상태, 대기 요청, 수행자, 기능, 입력, 결과 상태)
 CASES = [
@@ -49,9 +49,11 @@ CASES = [
 
 @pytest.mark.parametrize("start,pending,user,action,inputs,expected", CASES,
                          ids=[f"{c[0]}-{c[3]}-{c[2].id}" for c in CASES])
-def test_transition_and_history(engine, make_request, clock, start, pending, user, action, inputs, expected):
+def test_transition_and_history(engine, make_request, clock, changed_form, start, pending, user, action, inputs, expected):
     request = make_request(start, pending)
     before = len(request.events)
+    if action == "request_change":
+        inputs = {**inputs, "form": changed_form(request.form)}
 
     event = engine.execute(user, request, action, inputs, clock())
 

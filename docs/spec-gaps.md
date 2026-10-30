@@ -30,6 +30,7 @@
 | G-25 | 4.5 | 대소문자만 다른 도면번호는 중복인가 | 중복으로 본다 | 구현 해석 |
 | G-26 | 5.3.9 | 기본값이 공란인 PCB 보드 열전도도, 접촉저항을 체크했을 때의 칸 | 재료물성은 세 칸 모두 필수라 공란인 기본값은 의뢰자가 채워야 한다. 접촉저항을 체크하면 네 칸(재료, 열전도도, 두께, 적용 위치) 모두 필수다. 소자 값과 열전도도·두께는 숫자다 | 구현 해석 |
 | G-27 | 부록 C | 부록 C(h10 코드에서 뽑은 제안)와 저장 구조가 다르다 | 조건은 그룹별 구조(`conditions.<그룹>.packages[]`, `toggle`), 누설·입자·다상·PCB 냉매의 칸 키는 영문, 취출 온도 키는 `supply_temp`(C.5는 `heat_exchanger_temp`), PMS는 `analysis_overview.pms_project` 객체다. `condition_fieldset_snapshot` 대신 `reference_release`를 남기고, 조건 구성은 그 릴리스의 매핑에서 다시 만든다 | 구현 결정 |
+| G-28 | 6장, 4.6 | Case의 저장 구조와 “다시 확인”을 남기는 방법이 정해지지 않았다 | `cases[]`는 `id`, `geometry_id`, `condition_package_ids`(그룹→패키지 ID)를 둔다. 반복하지 않는 설치·PCB 그룹은 `$single`을 선택값으로 쓴다. `case_confirmation.source_hash`는 의뢰 대상·기준 릴리스·형상·활성 조건의 해시이며, 원본 변경 시 없어진 선택을 비우고 다시 확인하기 전 제출을 막는다 | 확인 필요 |
 | G-17 | 부록 A, 4.3 | 해석유형과 선택지의 저장 코드가 정의서에 없다 | 해석유형은 영문 코드(`AIRFLOW_RATE` 등, `rules/analysis_types.yaml`), 의뢰 유형도 영문 코드(`DEVELOPMENT_PROJECT` 등)로 정했다. 부록 C에 코드가 있는 해석 범위·결과 활용 목적은 그대로 쓰고, 나머지 선택지는 값이 곧 코드다 | 구현 결정 |
 
 구현하면서 찾아 고친 것: 거절된 변경안이 이력에서 사라지던 문제(3.4-7), 보류 중 취소가 승인될 때 보류 정보가 남던 문제(3.4-12). 둘 다 v1.1에 반영했다.
@@ -39,7 +40,6 @@
 | 정의서 | 내용 | 단계 |
 |---|---|---|
 | 3.4-9 | 의뢰번호 일련번호를 저장소에 두기. 지금은 `InMemoryNumberIssuer`(날짜별 일련번호, 메모리)다 | 5 |
-| 8장 | 제출 조건 검사. 3단계의 `check_form`(Case 제외)에 Case 검사를 더해 `SubmissionChecker`로 WorkflowEngine에 연결한다. 의뢰 요청일(첫 제출일)을 검사에 넘긴다(G-20). workflow 테스트의 의뢰서를 완성된 의뢰서로 바꾼다 | 4 |
 | 3.4-1, 4.2 | 의뢰서 수정·의뢰 대상 확정·PMS 선택을 한 유스케이스로 묶기: `can_edit_form` 확인 → `merge_user_edit`/`confirm_target`/`select_pms_project` → `WorkflowEngine.update_form` | 5 |
 | 3.5 | 상태별 건수, 의뢰별 이력·검토 의견·결과 조회 | 5·6 |
 | 3.6 | 알림. 이력 사건(수행자, 이전·이후 상태, 담당자)으로 받는 사람을 모두 정할 수 있다 | 7 |
