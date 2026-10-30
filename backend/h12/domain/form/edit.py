@@ -29,7 +29,7 @@ def merge_user_edit(current: Mapping[str, Any], edited: Mapping[str, Any]) -> di
         measurement[key] = {"value": value, "standard_value": standard, "modified": value != standard}
     if measurement or "measurement" in conditions:
         conditions["measurement"] = measurement
-    if _case_sources_changed(current, new):
+    if case_sources_changed(current, new):
         _clear_removed_case_choices(new)
         new.pop("case_confirmation", None)
     return new
@@ -42,7 +42,7 @@ def _keep(target: dict[str, Any], source: Mapping[str, Any], key: str) -> None:
         target.pop(key, None)
 
 
-def _case_sources_changed(current: Mapping[str, Any], edited: Mapping[str, Any]) -> bool:
+def case_sources_changed(current: Mapping[str, Any], edited: Mapping[str, Any]) -> bool:
     """형상·조건의 사용자 수정은 Case 재확인을 무효화한다."""
     return ((current.get("geometry") or {}) != (edited.get("geometry") or {})
             or (current.get("conditions") or {}) != (edited.get("conditions") or {}))

@@ -15,7 +15,7 @@ from .conditions import (
 )
 from .content import check_content, clear_pms_project, request_title, select_pms_project
 from .diff import FormChange, diff_forms
-from .edit import merge_user_edit
+from .edit import case_sources_changed, merge_user_edit
 from .errors import ConfirmationRequired, FormError
 from .products import GeometryAxis, check_products, geometry_axis
 from .rules import FormRules, RulesError
@@ -35,6 +35,6 @@ __all__ = [
     "check_selection",
     "clear_pms_project", "condition_config", "config_of", "confirm_cases", "confirm_target", "default_pcb",
     "diff_forms", "field_need", "geometry_axis", "group_mark", "is_active",
-    "is_locked", "merge_user_edit", "pinned_release", "request_title", "select_pms_project", "target_change",
+    "is_locked", "case_sources_changed", "merge_user_edit", "pinned_release", "request_title", "select_pms_project", "target_change",
     "default_cases", "MAX_AUTO_CASES", "refresh_cases", "SINGLE", "target_items", "visible_groups",
 ]

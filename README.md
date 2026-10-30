@@ -9,9 +9,16 @@
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
 .venv/Scripts/python -m pytest
+.venv/Scripts/python -m h12.manage_users upsert --id requester-1 --role REQUESTER --department CAE
+$env:H12_AUTH_SECRET = "proxy-only-secret"
 .venv/Scripts/python -m h12            # API: http://127.0.0.1:8512/api/health
 
 cd frontend
 npm install
 npm run dev                            # http://localhost:5173
 ```
+
+`H12_AUTH_SECRET`은 인증 프록시만 알고 있어야 한다. 프록시는 로그인 사용자의 ID와 현재
+Unix 시각을 `X-H12-User-Id`, `X-H12-Auth-Timestamp`에 넣고, `user_id:timestamp`의 HMAC-SHA256을
+`X-H12-Auth-Signature`에 넣는다. 서명은 5분 동안만 유효하다. 사용자 생성·역할 변경은 HTTP API가
+아닌 `h12.manage_users`로 수행한다.

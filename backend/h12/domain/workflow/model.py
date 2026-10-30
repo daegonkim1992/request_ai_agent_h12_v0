@@ -94,6 +94,7 @@ class Request:
     revisions: list[Revision] = field(default_factory=list)
     results: list[ResultRound] = field(default_factory=list)
     events: list[WorkflowEvent] = field(default_factory=list)
+    version: int = 0
 
     @property
     def current_revision(self) -> Revision | None:
