@@ -1,0 +1,57 @@
+# 제품 분류 변환 규칙 — 업무정의서 4.2, 9장
+#
+# python -m h12.reference.build 가 원본 xlsx 에 이 규칙을 적용해 refdata/taxonomy/<버전>.json 을 만든다.
+# 원본에서 빼거나 더하거나 고친 것은 모두 여기에 사유와 함께 적는다. 변환기 코드에 숨기지 않는다.
+# 제외·추가 목록은 h10_v0 이 원본을 정리한 결과(252개)를 규칙으로 옮긴 것이다 (docs/spec-gaps.md G-10).
+
+source:
+  file: ../총조립도 분류체계.xlsx        # 저장소 루트 기준
+  columns: [DIVISION, LEVEL1, LEVEL2, LEVEL3]
+
+# 4.2 사업부별 Platform 선택. 원본 열을 다음처럼 읽는다
+#   select       LEVEL1 = Product Line-up, LEVEL2 = Platform (목록에서 고름), LEVEL3 = Chassis
+#   from_lineup  LEVEL1 = Product Line-up = Platform (자동), LEVEL2 = Chassis.
+#                LEVEL3 은 정의서에 없는 단계라 버린다 (G-11)
+#   none         Platform 해당 없음
+platform_mode:
+  SAC: select
+  Chiller: select
+  RAC: from_lineup
+  Air Care: from_lineup
+  AIDC: none
+
+# 4.2 "NA" 가 실제 Chassis 값인 Platform. 다른 Platform 의 "NA" 는 Chassis 없음(빈 값)으로 읽는다.
+# 같은 Platform 에 다른 Chassis 가 있는데 "NA" 행이 함께 있으면 그 "NA" 행은 뺀다.
+na_chassis_platforms: [Duct(Multi V), Duct(Single CAC)]
+
+# 원본 값 오타 수정 (앞뒤 공백은 항상 지운다)
+fix_values:
+  Siganture(PP): Signature(PP)
+  Siganture(S7): Signature(S7)
+
+# 제외 규칙. match 의 키(division, product_lineup, platform, chassis)가 모두 같은 행을 뺀다.
+# chassis 는 "NA" 처리 전 원본 값과 비교한다
+exclude:
+  - match: { division: ESS }
+    reason: 해석의뢰 대상 사업부가 아니다
+  - match: { division: SAC, product_lineup: Platform }
+    reason: 패널·부속 분류
+  - match: { division: SAC, product_lineup: ETC }
+    reason: 기타·부속 분류
+  - match: { division: SAC, product_lineup: NetworkControl }
+    reason: 기타·부속 분류
+  - match: { division: SAC, platform: ETC(Heating) }
+    reason: 기타·부속 분류
+  - match: { division: SAC, platform: ETC(Multi V) }
+    reason: 기타·부속 분류
+  - match: { division: SAC, chassis: ETC }
+    reason: 기타 Chassis
+  - match: { division: SAC, chassis: Accessary }
+    reason: 부속 Chassis
+  - match: { division: SAC, chassis: test }
+    reason: 시험용 값
+
+# 원본에 없는 분류
+add:
+  - path: { division: AIDC, product_lineup: CDU }
+    reason: 원본에 없는 사업부 (업무정의서 9장의 5개 사업부)

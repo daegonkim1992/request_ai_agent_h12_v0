@@ -1,0 +1,23 @@
+# PMS 프로젝트 변환 규칙 — 업무정의서 4.3, 4.4, 9장
+#
+# 사업부별 원본 파일을 하나로 합친다. PMS 의 사업부 이름을 제품 분류의 사업부로 바꾼다 (G-14).
+# AIDC 는 PMS 파일이 없다.
+
+source:
+  dir: ../request_ai_agent_h10_v0/docs     # 저장소 루트 기준
+  files:
+    - { file: 20260915_PMS_Project_Running_Aircare.xlsx, pms_division: Air Care, division: Air Care }
+    - { file: 20260915_PMS_Project_Running_CAC.xlsx, pms_division: CAC, division: SAC }
+    - { file: 20260915_PMS_Project_Running_Chiller.xlsx, pms_division: Chiller, division: Chiller }
+    - { file: 20260915_PMS_Project_Running_RAC.xlsx, pms_division: RAC, division: RAC }
+
+# 이 열의 값이 파일의 pms_division 과 다르면 변환을 멈춘다
+division_column: Division
+
+# 원본 열 → 저장 키. 여기 없는 열(담당자·작성자 이름 등 개인정보 포함)은 가져오지 않는다
+columns:
+  PMS Project Code: code
+  Project: project
+  Rep Model: rep_model
+  Region: region
+  Product Group: product_group

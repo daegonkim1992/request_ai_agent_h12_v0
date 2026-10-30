@@ -16,6 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9"]
+# 기준 데이터 변환 (python -m h12.reference.build). 런타임에는 쓰지 않는다
+convert = ["openpyxl>=3.1,<4"]
 
 [tool.setuptools.packages.find]
 where = ["backend"]

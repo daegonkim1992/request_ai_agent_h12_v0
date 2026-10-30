@@ -1,0 +1,18 @@
+# 측정·판정 기준 표준값 — 업무정의서 5.3.11, 부록 C.7
+#
+# 표준값 자체는 [추후 정의]다. 지금은 항목 자리만 두고 값은 null(미정)이다.
+# 이 파일은 버전 파일이라 고치지 않는다. 값을 정하면 새 버전 파일을 만들고 manifest.yaml 에 새 릴리스를 추가한다.
+# 키: 해석유형 코드(rules/analysis_types.yaml) → 항목 키(부록 C.7 의 제안 키)
+
+dataset: measurement_standards
+version: "2026-10-30"
+values:
+  AIRFLOW_REACH:
+    reach_velocity: null          # 기류 측정 유속 (m/s)
+  REAL_USE:
+    measurement_locations: null   # 기류 속도 또는 온도 측정 위치
+  PDB:
+    temperature_criterion: null   # 온도 측정 기준
+    velocity_criterion: null      # 기류 속도 기준
+  PCB_HEAT:
+    allowable_temperature: null   # 허용 온도 기준

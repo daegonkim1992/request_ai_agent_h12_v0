@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from h12.domain.reference import AnalysisType, OptionList, parse_analysis_types, parse_options
 from h12.domain.workflow import WorkflowRules
 
 DEFAULT_RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
@@ -33,3 +34,13 @@ def load_workflow_rules(directory: Path | None = None) -> WorkflowRules:
         load_yaml("workflow.yaml", directory),
         load_yaml("reason_codes.yaml", directory),
     )
+
+
+@lru_cache(maxsize=None)
+def load_analysis_types(directory: Path | None = None) -> dict[str, AnalysisType]:
+    return parse_analysis_types(load_yaml("analysis_types.yaml", directory))
+
+
+@lru_cache(maxsize=None)
+def load_options(directory: Path | None = None) -> dict[str, OptionList]:
+    return parse_options(load_yaml("options.yaml", directory))

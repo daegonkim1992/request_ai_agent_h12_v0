@@ -14,6 +14,7 @@ FORBIDDEN = {
     "domain": ("flask", "sqlalchemy", "alembic", "yaml", "h12.application", "h12.infra", "h12.api",
                "h12.rulebook", "h12.reference"),
     "application": ("flask", "h12.api"),
+    "reference": ("flask", "sqlalchemy", "alembic", "h12.api", "h12.application", "h12.infra"),
 }
 
 
@@ -35,3 +36,10 @@ def test_layer_dependencies():
                 if any(name == f or name.startswith(f + ".") for f in forbidden):
                     violations.append(f"{path.relative_to(PACKAGE)} → {name}")
     assert violations == []
+
+
+def test_openpyxl_only_in_converter():
+    """xlsx 는 기준 데이터 변환에서만 읽는다. 런타임은 openpyxl 없이 돈다."""
+    users = [path.relative_to(PACKAGE).as_posix() for path in PACKAGE.rglob("*.py")
+             if any(n == "openpyxl" or n.startswith("openpyxl.") for n in _imports(path))]
+    assert users == ["reference/build.py"]
