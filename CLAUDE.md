@@ -22,7 +22,8 @@ refdata/            9장 기준 데이터. 버전 파일은 고치지 않는다 
 backend/h12/
   domain/           순수 업무 규칙. Flask, DB, YAML, 파일 입출력 금지
     workflow/       3장 상태·기능·대기 요청·revision·이력
-    reference/      4.2 제품 분류, 5.3.4 열교환기, 4.4 PMS, 부록 A·4.3 선택지 규칙
+    reference/      4.2 제품 분류, 5.3.4 열교환기, 4.4 PMS, 5.2 조건 매핑, 부록 A·4.3 선택지 규칙
+    form/           4장 의뢰서, 5장 해석조건, 3.4-5 revision 비교, 3.4-9 의뢰번호. 의뢰서는 dict 로 두고 해석·검사한다
   reference/        refdata/ 읽기(store.py)와 원본 변환(build.py, openpyxl 은 여기서만)
   application/      유스케이스 (5단계)
   infra/            DB·알림 구현 (5단계)
@@ -36,11 +37,14 @@ tests/              정의서 절 번호로 파일 이름을 붙인다 (test_3_2
 - **규칙은 데이터로 둔다.** 상태, 기능, 수행자, 사유 코드, 할 일 목록은 `rules/*.yaml` 에 있다. 엔진은 yaml 의 이름(actors, effects, requires, checks)만 해석한다. 새 이름이 필요할 때만 엔진과 `rules.py` 의 이름 목록을 함께 고친다.
 - 정의서의 `[검토 필요]` 항목은 되도록 yaml 값으로 둬서 확정 시 코드 수정 없이 바꿀 수 있게 한다.
 - 도메인 변경은 `WorkflowEngine` 을 거친다. `execute` 는 모든 검사를 마친 뒤에만 의뢰를 바꾼다.
+- 의뢰서 작업(`h12.domain.form`)은 새 의뢰서 dict 를 돌려주는 순수 함수다. 의뢰자가 보낸 의뢰서는 `merge_user_edit` 로 시스템 값(의뢰 대상, 의뢰번호, PMS, 표준값)을 지킨 뒤 쓴다.
+- 조건 구성은 의뢰가 남긴 기준 데이터 릴리스의 조건 매핑(`refdata/condition_mapping`)과 `rules/conditions.yaml` 이 정한다. 쓰지 않게 된 조건 값은 지우지 않는다.
 
 ## 테스트 원칙
 
 - 기대값은 yaml 에서 읽어 만들지 않고 **정의서 표를 테스트에 직접 옮겨 적는다.** 그래야 yaml 오류를 잡는다.
 - 의뢰를 특정 상태로 만들 때는 상태를 직접 넣지 않고 실제 기능을 순서대로 수행한다 (`tests/domain/workflow/conftest.py` 의 `make_request`).
+- 의뢰서도 dict 를 직접 꾸미지 않고 확정 → 의뢰자 수정 → PMS 선택 순서로 만든다 (`tests/domain/form/conftest.py` 의 `make_form`, `edit`).
 
 ## 명령
 
@@ -62,9 +66,10 @@ npm run build && npm run lint
 
 ## 단계
 
-0 골격 ✔ → 1 Workflow 도메인 ✔ → 2 기준 데이터 ✔ → 3 의뢰서·조건 엔진 → 4 Case·제출 검증 → 5 DB·API → 6 UI → 7 알림·지표 → 8 Agent
+0 골격 ✔ → 1 Workflow 도메인 ✔ → 2 기준 데이터 ✔ → 3 의뢰서·조건 엔진 ✔ → 4 Case·제출 검증 → 5 DB·API → 6 UI → 7 알림·지표 → 8 Agent
 
-- 정의서는 v1.2(2026-10-30)이다. 1단계 중 확인한 9건(G-1~G-9)과 2단계 중 확인한 7건(G-10~G-16)은 결정되어 정의서에 반영했다. G-17(저장 코드 이름)은 구현 결정이다.
+- 정의서는 v1.3(2026-10-30)이다. 1단계 중 확인한 9건(G-1~G-9)과 2단계 중 확인한 7건(G-10~G-16)은 결정되어 정의서에 반영했다. G-17(저장 코드 이름)은 구현 결정이다.
+- 3단계 중 확인한 G-18~G-21은 결정되어 v1.3에 반영했다(운전 구분 삭제 포함). G-22(측정·판정 기준 표준값)는 추후 정의, G-23~G-27은 구현 해석·결정이다.
 - 미룬 항목은 [docs/spec-gaps.md](docs/spec-gaps.md) "다음 단계로 미룬 것"에 있다.
 
 ### 기준 데이터 원본

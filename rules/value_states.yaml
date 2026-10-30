@@ -1,0 +1,16 @@
+# 값의 상태 — 업무정의서 5.4, 5.1
+#
+# 칸은 {value, status, source} 로 저장한다 (부록 C). 상태는 값에서 판정한다.
+# 입력한 글자가 아래 낱말과 같으면 그 상태다 (대소문자, 앞뒤 공백 무시). 비었으면 누락, 그 밖은 입력됨이다.
+# 값 없이 "없음"을 고른 칸(컨트롤로 명시)은 저장된 status 가 none 이다.
+
+keywords:
+  unknown: [모름, 확인 필요, unknown, tbd]
+  none: [없음, 해당 없음, none, n/a]
+  skipped: [건너뜀, 생략, skip]
+
+# 필수 칸을 채운 것으로 보는 상태. "모름"은 채운 것으로 본다 (G-21). 그 밖의 "모름" 처리는 [추후 정의]
+fills_required: [provided, unknown]
+
+# 5.1 자유 입력 최대 길이
+max_text_length: 200

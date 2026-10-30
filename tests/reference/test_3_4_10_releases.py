@@ -117,4 +117,4 @@ def test_file_must_match_its_version(root):
 
 
 def test_all_datasets_are_released():
-    assert set(DATASETS) == {"taxonomy", "hx_catalog", "pms", "measurement_standards"}
+    assert set(DATASETS) == {"taxonomy", "hx_catalog", "pms", "measurement_standards", "condition_mapping"}

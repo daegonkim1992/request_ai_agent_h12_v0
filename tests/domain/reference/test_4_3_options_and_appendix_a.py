@@ -49,9 +49,9 @@ def test_4_3_overview():
 def test_4_2_context_options():
     options = load_options()
     assert options["analysis_scope"].choices == {"indoor": "실내측", "outdoor": "실외측", "both": "실내·실외 모두"}
-    assert _labels("operation_mode") == ["실내", "실외", "동시운전"]
-    assert options["operation_mode"].default == "실내"
     assert _labels("cooling_method") == ["공랭식", "수랭식"]
+    # 운전 구분은 없다. 실내·실외 구분은 RAC Window 의 해석 범위로만 받는다 (G-18)
+    assert "operation_mode" not in options
 
 
 def test_5_3_11_measurement_standard_slots(ref):

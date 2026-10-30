@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .condition_mapping import ConditionMapping
 from .errors import ReferenceDataError
 from .hx_catalog import HxCatalog
 from .pms import PmsDirectory
@@ -41,3 +42,4 @@ class ReferenceSet:
     # PMS 는 3.4-10 의 고정 대상이 아니다. 고른 프로젝트의 값은 의뢰에 복사한다 (G-15)
     pms: PmsDirectory
     measurement_standards: MeasurementStandards
+    condition_mapping: ConditionMapping

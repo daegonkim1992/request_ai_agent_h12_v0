@@ -1,0 +1,32 @@
+# 해석유형별 조건 매핑 — 업무정의서 5.2
+#
+# 기준 데이터라 의뢰 대상을 확정한 릴리스에 고정된다 (3.4-10). 이 파일은 버전 파일이라 고치지 않는다.
+# 기호: ● 필수, ○ 선택, — 표시하지 않음
+# pcb_refrigerant 는 수랭식일 때만 쓴다 (rules/target.yaml 의 water_cooling)
+
+dataset: condition_mapping
+version: "2026-10-30"
+
+columns: [operating, room_temp, room_rh, room_pressure, supply_temp, supply_rh, heat_exchanger, filter,
+          installation, leakage, particles, pcb, pcb_refrigerant, multiphase]
+
+types:
+  #                      운전 공간T 공간RH 공간P 취출T 취출RH 열교 필터 설치 누설 입자 PCB 냉매 다상
+  AIRFLOW_PATTERN:     [●, ○, —, ○, ○, —, ○, ○, ○, —, —, —, —, —]
+  AIRFLOW_RATE:        [●, —, —, ○, —, —, ○, ○, ○, —, —, —, —, —]
+  CONDENSATION:        [●, ●, ●, —, ●, ●, ●, ○, ○, —, —, —, —, —]
+  HX_VELOCITY_PROFILE: [●, —, —, ○, —, —, ●, ○, ○, —, —, —, —, —]
+  AIRFLOW_REACH:       [●, ○, —, —, ○, —, ○, ○, ●, —, —, —, —, —]
+  PDB:                 [●, ●, —, —, ●, —, ○, ○, ●, —, —, —, —, —]
+  REAL_USE:            [●, ●, —, —, ●, —, ○, ○, ●, —, —, —, —, —]
+  DUST_BEHAVIOR:       [●, —, —, —, —, —, ○, ○, ●, —, ●, —, —, —]
+  PCB_HEAT:            [●, ●, —, —, ○, —, ○, ○, ○, —, —, ●, ●, —]
+  MULTIPHASE:          [○, —, —, —, —, —, ○, ○, ○, —, —, —, —, ●]
+  REFRIGERANT_LEAK:    [○, —, —, —, —, —, ○, ○, ○, ●, —, —, —, —]
+
+# 측정·판정 기준 항목 (5.3.11). 의뢰 전체에 하나만 둔다
+measurement:
+  AIRFLOW_REACH: [reach_velocity]
+  PDB: [temperature_criterion, velocity_criterion]
+  REAL_USE: [measurement_locations]
+  PCB_HEAT: [allowable_temperature]

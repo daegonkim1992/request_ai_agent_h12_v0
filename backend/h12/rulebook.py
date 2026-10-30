@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from h12.domain.form import FormRules
 from h12.domain.reference import AnalysisType, OptionList, parse_analysis_types, parse_options
 from h12.domain.workflow import WorkflowRules
 
@@ -44,3 +45,15 @@ def load_analysis_types(directory: Path | None = None) -> dict[str, AnalysisType
 @lru_cache(maxsize=None)
 def load_options(directory: Path | None = None) -> dict[str, OptionList]:
     return parse_options(load_yaml("options.yaml", directory))
+
+
+@lru_cache(maxsize=None)
+def load_form_rules(directory: Path | None = None) -> FormRules:
+    return FormRules.from_dicts(
+        form=load_yaml("form.yaml", directory),
+        target=load_yaml("target.yaml", directory),
+        value_states=load_yaml("value_states.yaml", directory),
+        conditions=load_yaml("conditions.yaml", directory),
+        options=load_options(directory),
+        analysis_types=load_analysis_types(directory),
+    )

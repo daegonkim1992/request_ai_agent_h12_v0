@@ -1,0 +1,133 @@
+# 해석조건 사전 — 업무정의서 5.3
+#
+# 어떤 조건이 필수(●)·선택(○)·비표시(—)인지는 기준 데이터의 조건 매핑(5.2, refdata/condition_mapping)이 정한다.
+# 이 파일은 조건 그룹이 매핑의 어느 열을 따르고 어떤 칸을 받는지 정한다.
+#
+# column    그룹 전체가 따르는 매핑 열
+# toggle    ○ 일 때 사용 여부를 정하는 체크박스. 값이 off_when 이면 조건을 쓰지 않는다.
+#           ● 이면 체크박스를 두지 않고 반드시 쓴다
+# single    패키지를 반복하지 않는 그룹 (설치, PCB)
+# fields    패키지의 칸. kind: number | text.
+#           column 이 있으면 칸마다 그 열을 따른다: ● 값 필수, ○ 값 또는 "없음", — 표시하지 않음
+#           column 이 없으면 required 로 정한다
+# checks    그룹 특유의 규칙 (엔진이 아는 이름: operating, heat_exchanger, filter, installation, pcb)
+
+groups:
+  operating:
+    label: 운전 조건
+    column: operating
+    package_label: 운전
+    toggle: { key: disabled, label: 운전 조건 없음, off_when: true }
+    checks: [operating]
+
+  space_environment:
+    label: 공간 환경 조건
+    package_label: 공간
+    fields:
+      room_temp:       { label: 공간 온도, unit: °C, kind: number, column: room_temp }
+      room_rh:         { label: 공간 상대습도 (RH), unit: "%", kind: number, column: room_rh }
+      inlet_pressure:  { label: 입구 압력, unit: Pa, kind: number, column: room_pressure }
+      outlet_pressure: { label: 출구 압력, unit: Pa, kind: number, column: room_pressure }
+
+  supply_air:
+    label: 취출 공기 조건
+    package_label: 취출
+    fields:
+      supply_temp: { label: 취출 온도, unit: °C, kind: number, column: supply_temp }
+      supply_rh:   { label: 취출 상대습도 (RH), unit: "%", kind: number, column: supply_rh }
+
+  heat_exchanger:
+    label: 열교환기 사양
+    column: heat_exchanger
+    package_label: 열교환기
+    toggle: { key: none, label: 열교환기 없음, off_when: true }
+    checks: [heat_exchanger]
+
+  filter:
+    label: 필터 사양
+    column: filter
+    package_label: 필터
+    toggle: { key: enabled, label: 제품에 필터가 있음, off_when: false }
+    checks: [filter]
+
+  installation:
+    label: 설치 조건
+    column: installation
+    single: true
+    toggle: { key: enabled, label: 설치 조건 있음, off_when: false }
+    checks: [installation]
+
+  leakage:
+    label: 누설 조건
+    column: leakage
+    package_label: 누설
+    fields:
+      refrigerant:       { label: 냉매 종류, kind: text, required: true }
+      location:          { label: 누설 위치, kind: text, required: true }
+      amount:            { label: 누설량, kind: text, required: true }
+      size:              { label: 누설 크기/면적, kind: text, required: true }
+      pressure:          { label: 누설 압력, kind: text, required: true }
+      temperature:       { label: 누설 온도, kind: text, required: true }
+      duration:          { label: 누설 시간, kind: text, required: true }
+      notes:             { label: 추가 요청사항 및 해석 참고사항, kind: text, required: false }
+
+  particles:
+    label: 입자 조건
+    column: particles
+    package_label: 입자
+    fields:
+      density:      { label: 입자 밀도, kind: text, required: true }
+      diameter:     { label: 입자 직경, kind: text, required: true }
+      duration:     { label: 발생 시간, kind: text, required: true }
+      total_amount: { label: 총 발생량, kind: text, required: true }
+
+  pcb:
+    label: PCB 조건
+    column: pcb
+    single: true
+    checks: [pcb]
+
+  multiphase:
+    label: 다상 조건
+    column: multiphase
+    package_label: 다상
+    fields:
+      fluid:                  { label: 냉매(작동유체) 종류, kind: text, required: true }
+      initial_state:          { label: 초기 상태, kind: text, required: true }
+      mass_flow:              { label: 질량유량, kind: text, required: true }
+      inlet_quality:          { label: 입구 상태 (건도/상분율), kind: text, required: true }
+      gas_velocity_or_flow:   { label: 기상 측 속도 또는 유량, kind: text, required: false }
+      liquid_velocity_or_flow: { label: 액상 측 속도 또는 유량, kind: text, required: false }
+      notes:                  { label: 추가 요청사항 및 해석 참고사항, kind: text, required: false }
+
+# 5.3.1 운전 조건
+operating:
+  max_fans: 10
+  rpm_modes: { common: 모든 팬 동일, individual: 팬별 설정 }
+  airflow_purposes: { reflect: 해석에 반영 요청, reference: 참고 정보로 제공 }
+
+# 5.3.9 PCB 조건
+pcb:
+  device_bases: { temperature: 온도 (°C), heat: 발열량 (W) }
+  contact_resistance_default: { material: Grease, thermal_conductivity: 0.8, thickness: 0.1 }
+  materials_default:
+    - { applied_part: 히트싱크, material_name: 알루미늄, thermal_conductivity: 200 }
+    - { applied_part: 소자, material_name: 알루미늄, thermal_conductivity: 200 }
+    - { applied_part: PCB 보드, material_name: PCB 보드 물성, thermal_conductivity: null }
+    - { applied_part: 파이프, material_name: 구리, thermal_conductivity: 390, water_cooling_only: true }
+  refrigerant_fields:
+    refrigerant:       { label: 냉매 종류, kind: text }
+    mass_flow:         { label: 질량유량, kind: text }
+    inlet_temperature: { label: 입구 온도, kind: text }
+    inlet_pressure:    { label: 입구 압력, kind: text }
+    inlet_quality:     { label: 입구 상태 (건도/상분율), kind: text }
+
+# 5.3.11 측정·판정 기준 항목. 어느 해석유형에 있는지는 조건 매핑이 정한다
+measurement_items:
+  reach_velocity:        { label: 기류 측정 유속, unit: m/s }
+  measurement_locations: { label: 기류 속도 또는 온도 측정 위치 }
+  temperature_criterion: { label: 온도 측정 기준 }
+  velocity_criterion:    { label: 기류 속도 기준 }
+  allowable_temperature: { label: 허용 온도 기준 }
+# 측정·판정 기준 값을 반드시 채워야 하는가. 표준값과 함께 [추후 정의]라 지금은 선택이다 (G-22)
+measurement_required: false

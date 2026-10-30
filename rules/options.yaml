@@ -11,11 +11,6 @@
 analysis_scope:
   choices: { indoor: 실내측, outdoor: 실외측, both: 실내·실외 모두 }
 
-# 4.2 운전 구분 (통합형 제품일 때만)
-operation_mode:
-  choices: [실내, 실외, 동시운전]
-  default: 실내
-
 # 4.2 냉각 방식 (PCB발열일 때만)
 cooling_method:
   choices: [공랭식, 수랭식]

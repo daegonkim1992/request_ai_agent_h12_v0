@@ -16,7 +16,8 @@ from typing import Any, Callable, Mapping
 import yaml
 
 from h12.domain.reference import (
-    HxCatalog, MeasurementStandards, PmsDirectory, ProductTaxonomy, ReferenceDataError, ReferenceSet,
+    ConditionMapping, HxCatalog, MeasurementStandards, PmsDirectory, ProductTaxonomy, ReferenceDataError,
+    ReferenceSet,
 )
 
 DEFAULT_REFDATA_DIR = Path(__file__).resolve().parents[3] / "refdata"
@@ -27,6 +28,7 @@ DATASETS: dict[str, tuple[str, Callable[[Mapping[str, Any]], Any]]] = {
     "hx_catalog": ("json", HxCatalog.from_dict),
     "pms": ("json", PmsDirectory.from_dict),
     "measurement_standards": ("yaml", MeasurementStandards.from_dict),
+    "condition_mapping": ("yaml", ConditionMapping.from_dict),
 }
 
 
